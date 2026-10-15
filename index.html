@@ -64,13 +64,25 @@ function sw(m,p,isP){return{m,p:p.slice(),dir:[0,0,-1],dash:0,cd:0,player:isP,ai
 function randDir(){if(S.mode==='2d'){const a=rnd()*TAU;return[Math.cos(a),Math.sin(a),0]}const v=new THREE.Vector3().randomDirection();return[v.x,v.y,v.z]}
 function spawnItem(i,anywhere){const R=rad(player.m),d=anywhere?R*(3+rnd()*32):R*(26+rnd()*14),v=randDir();
  ix[i]=player.p[0]+v[0]*d;iy[i]=player.p[1]+v[1]*d;iz[i]=player.p[2]+v[2]*d;
- const s=R*(0.06+Math.pow(rnd(),2.2)*1.4);is[i]=s;ic[i]=(rnd()*5)|0;ik[i]=s/R<0.35?0:s/R<0.75?1:2;
- tmpC.setHex(PAL[stage3][ic[i]]);itemMesh.setColorAt(i,tmpC);}
+ let s,kind;
+ if(S.mode==='2d'){ // absolute world sizes so mass can't explode with player size
+  const roll=rnd();
+  if(player.m<6000){kind=0;s=0.35+rnd()*1.1}
+  else if(player.m<30000){kind=roll<0.55?0:1;s=kind===0?0.5+rnd()*1.4:1.6+rnd()*2.4}
+  else{kind=roll<0.4?0:roll<0.75?1:2;s=kind===0?0.7+rnd()*1.8:kind===1?2.2+rnd()*3.5:4+rnd()*7}
+  // only edible if smaller than ~0.9 of player radius
+  if(s>=R*0.9){kind=0;s=R*(0.12+rnd()*0.55)}
+ }else{
+  s=R*(0.06+Math.pow(rnd(),2.2)*0.85); // slightly smaller than before
+  kind=s/R<0.35?0:s/R<0.75?1:2;
+ }
+ is[i]=s;ic[i]=(rnd()*5)|0;ik[i]=kind;
+ tmpC.setHex(PAL[Math.min(stage3,2)][ic[i]]);itemMesh.setColorAt(i,tmpC);}
 function spawnRival(r){const R=rad(player.m),v=randDir(),d=R*(14+rnd()*16);
  const m=Math.max(0.3,player.m*(0.25+rnd()*1.7));const o=r||sw(m,[0,0,0],false);o.m=m;
  o.p=[player.p[0]+v[0]*d,player.p[1]+v[1]*d,player.p[2]+v[2]*d];o.dir=randDir();o.hue=rnd();return o;}
 function init(){S={mode:'3d',t:0,yaw:0,pitch:0,trans:0,dead:false,best:1};stage3=0;itemMesh.geometry=geos[0];
- player=sw(1,[0,0,0],true);rivals=[];for(let i=0;i<NR;i++)rivals.push(spawnRival());
+ player=sw(1.8,[0,0,0],true);rivals=[];for(let i=0;i<NR;i++)rivals.push(spawnRival());
  for(let i=0;i<N;i++)spawnItem(i,true);itemMesh.instanceColor.needsUpdate=true;
  renderer.domElement.style.display='block';cv.style.display='none';$('over').style.display='none';
  camera.position.set(0,1,4);}
@@ -118,7 +130,7 @@ function update(dt){S.t+=dt;const two=S.mode==='2d';const PR=rad(player.m);
  const pull=two?1.0:1.6;
  for(const s of all){const R=rad(s.m),lim=R*0.92,er=R*pull,mag=R*3.2,px=s.p[0],py=s.p[1],pz=s.p[2];
   for(let i=0;i<N;i++){const dx=ix[i]-px,dy=iy[i]-py,dz=iz[i]-pz,d2=dx*dx+dy*dy+dz*dz,si=is[i];
-   if(si<lim){if(d2<(er+si*0.3)**2){s.m+=Math.max(0.02,si*si*si*1.2);spawnItem(i,false);continue}
+   if(si<lim){if(d2<(er+si*0.3)**2){const gain=Math.min(s.m*0.035+0.08, Math.max(0.02,si*si*si*0.9));s.m+=gain;spawnItem(i,false);continue}
     if(s.player&&d2<mag*mag){const f=Math.min(1,dt*3);ix[i]-=dx*f;iy[i]-=dy*f;iz[i]-=dz*f}}
    else if(s.player){const md=R+si*0.8;if(d2<md*md){const d=Math.sqrt(d2)||1,o=(md-d)/d;s.p[0]-=dx*o;s.p[1]-=dy*o;s.p[2]-=dz*o}}}}
  const PR2=rad(player.m),far=(PR2*44)**2;
@@ -127,11 +139,13 @@ function update(dt){S.t+=dt;const two=S.mode==='2d';const PR=rad(player.m);
  for(let a=0;a<all.length;a++)for(let b=a+1;b<all.length;b++){const A=all[a],B=all[b],RA=rad(A.m),RB=rad(B.m);
   const d=[B.p[0]-A.p[0],B.p[1]-A.p[1],B.p[2]-A.p[2]],dl=Math.hypot(...d)||1e-3;if(dl>(RA+RB)*0.8)continue;
   let big=A,sm=B;if(B.m>A.m){big=B;sm=A}
-  if(big.m>sm.m*1.12){const dr=Math.min(sm.m,(sm.m*0.9+0.4)*dt);sm.m-=dr;big.m+=dr*0.75;
-   if(sm.m<0.35){if(sm.player){die();return}big.m+=sm.m;spawnRival(sm)}}
+  if(big.m>sm.m*1.12){const dr=Math.min(sm.m,(sm.m*0.55+0.25)*dt);sm.m-=dr;big.m+=Math.min(dr*0.55, big.m*0.02+0.5);
+   if(sm.m<0.35){if(sm.player){die();return}big.m+=Math.min(sm.m, big.m*0.08+1);spawnRival(sm)}}
   else{const o=((RA+RB)*0.8-dl)/dl*0.5;A.p[0]-=d[0]*o;A.p[1]-=d[1]*o;A.p[2]-=d[2]*o;B.p[0]+=d[0]*o;B.p[1]+=d[1]*o;B.p[2]+=d[2]*o}}
  for(const r of rivals){const d=Math.hypot(r.p[0]-player.p[0],r.p[1]-player.p[1],r.p[2]-player.p[2]);
   if(d>PR2*48||r.m<player.m*0.04||r.m>player.m*10)spawnRival(r)}
+ // soft ceiling so City doesn't go infinite
+ for(const s of all){if(s.m>2e6)s.m=2e6+(s.m-2e6)*0.15;if(s.m>5e6)s.m=5e6}
  S.best=Math.max(S.best,player.m);
  if(!two){const st=player.m<ST3[0]?0:player.m<ST3[1]?1:2;if(st!==stage3){stage3=st;itemMesh.geometry=geos[st];
    for(let i=0;i<N;i++){tmpC.setHex(PAL[st][ic[i]]);itemMesh.setColorAt(i,tmpC)}banner(STAGE3[st].toUpperCase(),1.6)}
@@ -143,7 +157,7 @@ function enter2D(){S.mode='2d';const P=player.p;
  player.p=[0,0,0];player.dir=[0,-1,0];for(let i=0;i<N;i++)spawnItem(i,true);
  renderer.domElement.style.display='none';cv.style.display='block';S.cx=0;S.cy=0;}
 function stageName(){if(S.mode==='2d')return player.m<6000?'Surface — Rocks':player.m<30000?'Surface — Forest':'Surface — City';if(S.mode==='trans')return'GRAVITY';return STAGE3[stage3]}
-const fmt=m=>m<1000?m.toFixed(1):m<1e6?(m/1000).toFixed(2)+'k':(m/1e6).toFixed(2)+'M';
+const fmt=m=>{if(m<1000)return m.toFixed(1);if(m<1e6)return(m/1e3).toFixed(1)+'k';if(m<1e9)return(m/1e6).toFixed(2)+'M';if(m<1e12)return(m/1e9).toFixed(2)+'B';return(m/1e12).toFixed(2)+'T'};
 function colFor(s){if(s.player)return 0x77ccff;return s.m>player.m*1.12?0xff3344:s.m*1.12<player.m?0x44ff77:0xffdd44}
 // ---------- render 3D
 function render3D(dt){const all=[player,...rivals],PR=rad(player.m),P=player.p,d=player.dir;
