@@ -22,7 +22,7 @@ canvas{display:block;position:fixed;inset:0}
 <div id="help">Drag to steer &nbsp;•&nbsp; Tap to dash (costs mass) &nbsp;•&nbsp; Hunt green &nbsp;•&nbsp; Flee red &nbsp;•&nbsp; Stages get denser and meaner</div>
 <script type="module">
 import * as THREE from 'three';
-const N=1000, NR=7, ORB=9000, GRAV=1200, ST3=[30,220,GRAV];
+const N=1000, NR=8, ORB=9000, GRAV=1200, ST3=[30,220,GRAV];
 const $=id=>document.getElementById(id);
 const rad=m=>0.5*Math.cbrt(Math.max(m,0.01));
 const rnd=Math.random, TAU=Math.PI*2;
@@ -55,6 +55,14 @@ const orbit=new THREE.Points(og,oMat);orbit.frustumCulled=false;scene.add(orbit)
 const PAL=[[0xff3355,0x33ff77,0x3388ff,0x66ffff,0xffee55],[0xffffff,0xff5544,0x4488ff,0xaaaaaa,0xffaa33],[0x998877,0xbb9966,0x8888aa,0xccbbaa,0x776655]];
 const STAGE3=['Subatomic','Atoms & Molecules','Dust & Rock'];
 // per-orbiter random tables
+// big named atoms (Subatomic goals)
+const ATOMS=[['He',2,0xffe066],['C',6,0x9aa0a8],['N',7,0x5a8cff],['O',8,0xff5a5a],['Ne',10,0xff8a3d],['Na',11.5,0xd77bff],['Si',14,0x7dffd8]];
+const NA=ATOMS.length,atoms=[];
+const atomMesh=new THREE.InstancedMesh(new THREE.SphereGeometry(1,20,14),new THREE.MeshBasicMaterial({transparent:true,opacity:.55,blending:THREE.AdditiveBlending,depthWrite:false}),NA);atomMesh.frustumCulled=false;scene.add(atomMesh);
+function lblTex(t,c){const cv=document.createElement('canvas');cv.width=128;cv.height=64;const g=cv.getContext('2d');g.font='bold 48px sans-serif';g.textAlign='center';g.textBaseline='middle';g.fillStyle='#'+c.toString(16).padStart(6,'0');g.shadowColor='#000';g.shadowBlur=8;g.fillText(t,64,34);return new THREE.CanvasTexture(cv)}
+for(let k=0;k<NA;k++){const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:lblTex(ATOMS[k][0],ATOMS[k][2]),depthWrite:false,fog:false}));scene.add(sp);atoms.push({k,p:[0,0,0],v:[0,0,0],sp})}
+const atomR=a=>rad(ATOMS[a.k][1])*1.25;
+function spawnAtom(a,near){const R=rad(player.m),v=randDir(),d=near?R*(6+rnd()*18):R*(20+rnd()*14);a.p=[player.p[0]+v[0]*d,player.p[1]+v[1]*d,player.p[2]+v[2]*d];a.v=randDir().map(x=>x*0.4)}
 const OR=new Float32Array(900*6);for(let i=0;i<OR.length;i++)OR[i]=rnd();
 // ---------- state
 const ix=new Float32Array(N),iy=new Float32Array(N),iz=new Float32Array(N),is=new Float32Array(N),ic=new Uint8Array(N),ik=new Uint8Array(N);
@@ -75,7 +83,7 @@ function spawnItem(i,anywhere){const R=rad(player.m),far=anywhere?R*(4+rnd()*36)
   }
   if(s>=R*0.88 && kind!==2){s=R*(0.1+rnd()*0.45);kind=0}
  }else if(stage3===0){ // Subatomic: tiny dust + dangerous heavy nuclei
-  s=R*(roll<0.78?0.04+rnd()*0.28:0.95+rnd()*0.9); kind=s/R<0.4?0:2;
+  s=R*(roll<0.86?0.06+rnd()*0.3:0.95+rnd()*0.9); kind=s/R<0.4?0:2;
  }else if(stage3===1){ // Molecules: mid clumps, sticky-looking mediums
   s=R*(0.15+Math.pow(rnd(),1.4)*0.95); kind=s/R<0.45?0:s/R<0.85?1:2;
  }else{ // Dust/Rock: sparse large rocks, few free crumbs
@@ -86,12 +94,12 @@ function spawnItem(i,anywhere){const R=rad(player.m),far=anywhere?R*(4+rnd()*36)
 function spawnRival(r){const R=rad(player.m),v=randDir(),d=R*(12+rnd()*22);
  // Mostly smaller/even; rare predators so reds don't constant-hunt
  const roll=rnd();
- const m=Math.max(0.35, player.m*(roll<0.55?0.35+rnd()*0.45:roll<0.88?0.75+rnd()*0.35:1.05+rnd()*0.55));
+ const m=Math.max(0.35, player.m*(roll<0.45?0.35+rnd()*0.45:roll<0.86?0.8+rnd()*0.35:1.05+rnd()*0.5));
  const o=r||sw(m,[0,0,0],false);o.m=m;
- o.p=[player.p[0]+v[0]*d,player.p[1]+v[1]*d,player.p[2]+v[2]*d];o.dir=randDir();o.hue=rnd();o.hunger=0.35+rnd()*0.45;return o;}
+ o.p=[player.p[0]+v[0]*d,player.p[1]+v[1]*d,player.p[2]+v[2]*d];o.dir=randDir();o.hue=rnd();o.hunger=0.5+rnd()*0.5;return o;}
 function init(){S={mode:'3d',t:0,yaw:0,pitch:0,trans:0,dead:false,best:1};stage3=0;itemMesh.geometry=geos[0];
  player=sw(1,[0,0,0],true);rivals=[];for(let i=0;i<NR;i++)rivals.push(spawnRival());
- for(let i=0;i<N;i++)spawnItem(i,true);itemMesh.instanceColor.needsUpdate=true;
+ for(const a of atoms)spawnAtom(a,true);for(let i=0;i<N;i++)spawnItem(i,true);itemMesh.instanceColor.needsUpdate=true;
  renderer.domElement.style.display='block';cv.style.display='none';$('over').style.display='none';
  camera.position.set(0,1,4);}
 // ---------- input
@@ -111,7 +119,7 @@ function steer(){let sx=(keys.KeyD||keys.ArrowRight?1:0)-(keys.KeyA||keys.ArrowL
 function dash(s){if(S.mode==='trans'||s.cd>0||s.m<2)return;const c=Math.max(0.2,s.m*0.04);s.m-=c;s.dash=0.45;s.cd=0.9;}
 // ---------- sim
 function norm(v){const l=Math.hypot(v[0],v[1],v[2])||1;v[0]/=l;v[1]/=l;v[2]/=l;return v}
-const spd=s=>(3+rad(s.m)*2.2)*(s.dash>0?2.6:1);
+const spd=s=>(3.6+rad(s.m)*2.6)*(s.dash>0?2.6:1);
 function stage2Pull(){return player.m<5000?1.15:player.m<22000?0.95:0.8}
 function update(dt){S.t+=dt;const two=S.mode==='2d';const PR=rad(player.m);
  // player
@@ -131,7 +139,7 @@ function update(dt){S.t+=dt;const two=S.mode==='2d';const PR=rad(player.m);
    const pd2=Math.hypot(player.p[0]-r.p[0],player.p[1]-r.p[1],player.p[2]-r.p[2]);
    if(!fl && player.m*1.2<r.m && pd2<R*(two?10:8)){prey=player;pd=pd2}
    if(fl)r.tgt=norm(flee);
-   else if(prey){r.tgt=norm([prey.p[0]-r.p[0],prey.p[1]-r.p[1],prey.p[2]-r.p[2]]);if(pd<R*3.5&&rnd()<0.22)dash(r)}
+   else if(prey){r.tgt=norm([prey.p[0]-r.p[0],prey.p[1]-r.p[1],prey.p[2]-r.p[2]]);if(pd<R*3.5&&rnd()<0.28)dash(r)}
    else{let best=-1,bd=1e18;for(let k=0;k<45;k++){const i=(rnd()*N)|0;if(is[i]>R*0.9)continue;const d=(ix[i]-r.p[0])**2+(iy[i]-r.p[1])**2+(iz[i]-r.p[2])**2;if(d<bd){bd=d;best=i}}
     if(best>=0)r.tgt=norm([ix[best]-r.p[0],iy[best]-r.p[1],iz[best]-r.p[2]]);}
    if(two)r.tgt[2]=0;}
@@ -140,13 +148,15 @@ function update(dt){S.t+=dt;const two=S.mode==='2d';const PR=rad(player.m);
  for(const s of all){const v=spd(s)*(s.player?mul:0.78)*dt;s.sp=v/dt;s.p[0]+=s.dir[0]*v;s.p[1]+=s.dir[1]*v;s.p[2]+=two?0:s.dir[2]*v;if(two)s.p[2]=0;}
  // items
  const pull=two?(stage2Pull()):(stage3===0?1.1:stage3===1?1.35:0.95);
- for(const s of all){const R=rad(s.m),lim=R*(two?0.88:0.9),er=R*pull,mag=R*(two?2.2:2.6),px=s.p[0],py=s.p[1],pz=s.p[2];
+ for(const s of all){const R=rad(s.m),lim=R*(two?0.88:0.9),er=R*pull,mag=R*(two?1.6:1.7),px=s.p[0],py=s.p[1],pz=s.p[2];
   for(let i=0;i<N;i++){const dx=ix[i]-px,dy=iy[i]-py,dz=iz[i]-pz,d2=dx*dx+dy*dy+dz*dz,si=is[i];
    if(si<lim){if(d2<(er+si*0.25)**2){const raw=Math.max(0.02,si*si*si*0.7);const gain=Math.min(s.m*0.028+0.06, raw);s.m+=gain;spawnItem(i,false);continue}
-    if(s.player&&d2<mag*mag){const f=Math.min(1,dt*(two?2.2:2.6));ix[i]-=dx*f;iy[i]-=dy*f;iz[i]-=dz*f}}
-   else if(s.player){const md=R+si*0.85;if(d2<md*md){const d=Math.sqrt(d2)||1,o=(md-d)/d*1.15;s.p[0]-=dx*o;s.p[1]-=dy*o;s.p[2]-=dz*o}}}}
+    if(s.player&&d2<mag*mag){const f=Math.min(1,dt*(two?5:6));ix[i]-=dx*f;iy[i]-=dy*f;iz[i]-=dz*f}}
+   else if(s.player){const md=(R+si)*0.7;if(d2<md*md){const d=Math.sqrt(d2)||1,o=(md-d)/d*0.6;s.p[0]-=dx*o;s.p[1]-=dy*o;s.p[2]-=dz*o}}}}
  const PR2=rad(player.m),far=(PR2*44)**2;
  for(let i=0;i<N;i++){if((ix[i]-player.p[0])**2+(iy[i]-player.p[1])**2+(iz[i]-player.p[2])**2>far)spawnItem(i,false)}
+ // atoms
+ if(!two)updateAtoms(dt);
  // swarm vs swarm
  for(let a=0;a<all.length;a++)for(let b=a+1;b<all.length;b++){const A=all[a],B=all[b],RA=rad(A.m),RB=rad(B.m);
   const d=[B.p[0]-A.p[0],B.p[1]-A.p[1],B.p[2]-A.p[2]],dl=Math.hypot(...d)||1e-3;if(dl>(RA+RB)*0.8)continue;
@@ -162,6 +172,14 @@ function update(dt){S.t+=dt;const two=S.mode==='2d';const PR=rad(player.m);
  if(!two){const st=player.m<ST3[0]?0:player.m<ST3[1]?1:2;if(st!==stage3){stage3=st;itemMesh.geometry=geos[st];
    for(let i=0;i<N;i++){tmpC.setHex(PAL[st][ic[i]]);itemMesh.setColorAt(i,tmpC)}banner(STAGE3[st].toUpperCase(),1.6)}
   if(player.m>=GRAV){S.mode='trans';S.trans=0;S.camFrom=camera.position.clone();banner('GRAVITY',3)}}}
+function updateAtoms(dt){const show=stage3===0&&S.mode==='3d',PR=rad(player.m);atomMesh.visible=show;
+ for(const a of atoms){a.sp.visible=show;if(!show)continue;const ar=atomR(a),am=ATOMS[a.k][1];
+  for(let j=0;j<3;j++)a.p[j]+=a.v[j]*dt*(0.6+ar);
+  const d=[a.p[0]-player.p[0],a.p[1]-player.p[1],a.p[2]-player.p[2]],dl=Math.hypot(...d)||1e-3;
+  if(dl>PR*50){spawnAtom(a,false);continue}
+  if(dl<PR+ar*0.6){if(player.m>am*1.15){const g=am*0.7;player.m+=g;banner(ATOMS[a.k][0]+' +'+g.toFixed(1),1.2);spawnAtom(a,false);continue}
+   const o=(PR+ar*0.6-dl)/dl;player.p[0]-=d[0]*o;player.p[1]-=d[1]*o;player.p[2]-=d[2]*o;a.v=norm(d.slice()).map(x=>x*1.2)}
+  for(const r of rivals){const e=Math.hypot(a.p[0]-r.p[0],a.p[1]-r.p[1],a.p[2]-r.p[2]);if(e<rad(r.m)+ar*0.6&&r.m>am*1.15){r.m+=am*0.5;spawnAtom(a,false);break}}}}
 function die(){S.dead=true;$('final').textContent='Peak mass '+fmt(S.best)+' — '+stageName();$('over').style.display='flex'}
 let bannerT=0,bannerD=1;function banner(t,d){$('banner').textContent=t;bannerT=d;bannerD=d}
 function enter2D(){S.mode='2d';const P=player.p;
@@ -184,14 +202,17 @@ function render3D(dt){const all=[player,...rivals],PR=rad(player.m),P=player.p,d
  else if(stage3===1){scene.background.setHex(0x061018);scene.fog.color.setHex(0x061018);scene.fog.near=PR*7;scene.fog.far=PR*36}
  else{scene.background.setHex(0x0a0908);scene.fog.color.setHex(0x0a0908);scene.fog.near=PR*10;scene.fog.far=PR*48};
  for(let i=0;i<N;i++){dummy.position.set(ix[i],iy[i],iz[i]);dummy.rotation.set(S.t*0.3+i,i*0.7,0);dummy.scale.setScalar(is[i]);dummy.updateMatrix();itemMesh.setMatrixAt(i,dummy.matrix)}
+ atoms.forEach((a,j)=>{const ar=atomR(a),ok=player.m>ATOMS[a.k][1]*1.15;dummy.position.set(...a.p);dummy.rotation.set(0,0,0);dummy.scale.setScalar(ar*(1+0.04*Math.sin(S.t*3+j)));dummy.updateMatrix();atomMesh.setMatrixAt(j,dummy.matrix);tmpC.setHex(ATOMS[a.k][2]);if(!ok)tmpC.multiplyScalar(0.45);atomMesh.setColorAt(j,tmpC);
+  a.sp.position.set(a.p[0],a.p[1]+ar*1.5,a.p[2]);a.sp.scale.set(ar*1.6,ar*0.8,1);a.sp.material.opacity=ok?1:0.6;});
+ atomMesh.instanceMatrix.needsUpdate=true;if(atomMesh.instanceColor)atomMesh.instanceColor.needsUpdate=true;
  itemMesh.instanceMatrix.needsUpdate=true;itemMesh.instanceColor.needsUpdate=true;
  let n=0;const t=S.t;
  all.forEach((s,j)=>{const R=rad(s.m);dummy.position.set(...s.p);dummy.rotation.set(0,0,0);dummy.scale.setScalar(R*0.42);dummy.updateMatrix();cores.setMatrixAt(j,dummy.matrix);
   tmpC.setHex(colFor(s));cores.setColorAt(j,tmpC);const cr=tmpC.r,cg=tmpC.g,cb=tmpC.b;
-  const cnt=Math.min(900,Math.floor(12+Math.sqrt(s.m)*14));const fl=Math.min(1,s.sp/(3+R*2.2));
+  const cnt=Math.min(900,Math.floor(10+Math.sqrt(s.m)*10));const fl=Math.min(1,s.sp/(3.6+R*2.6));
   const collapse=S.mode==='trans'?Math.max(0.15,1-S.trans/2.6):1;
-  for(let k=0;k<cnt&&n<ORB;k++,n++){const o=k*6,r=R*(0.55+0.9*Math.sqrt(OR[o]))*collapse,th=OR[o+1]*TAU+t*(0.6+OR[o+2]*1.5)*(OR[o+3]>.5?1:-1),ph=Math.acos(2*OR[o+4]-1);
-   const tail=R*OR[o+5]*OR[o+5]*1.6*fl;
+  for(let k=0;k<cnt&&n<ORB;k++,n++){const o=k*6,r=R*(0.6+0.45*Math.sqrt(OR[o]))*collapse,th=OR[o+1]*TAU+t*(0.6+OR[o+2]*1.5)*(OR[o+3]>.5?1:-1),ph=Math.acos(2*OR[o+4]-1);
+   const tail=R*OR[o+5]*OR[o+5]*0.9*fl;
    oPos[n*3]=s.p[0]+r*Math.sin(ph)*Math.cos(th)-s.dir[0]*tail;oPos[n*3+1]=s.p[1]+r*Math.cos(ph)-s.dir[1]*tail;oPos[n*3+2]=s.p[2]+r*Math.sin(ph)*Math.sin(th)-s.dir[2]*tail;
    const v=0.6+OR[o+2]*0.6;oCol[n*3]=cr*v;oCol[n*3+1]=cg*v;oCol[n*3+2]=cb*v;}});
  cores.instanceMatrix.needsUpdate=true;cores.instanceColor.needsUpdate=true;
