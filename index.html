@@ -22,7 +22,7 @@ canvas{display:block;position:fixed;inset:0}
 <div id="help">Drag to steer &nbsp;•&nbsp; Tap to dash (costs mass) &nbsp;•&nbsp; Hunt green &nbsp;•&nbsp; Flee red &nbsp;•&nbsp; Stages get denser and meaner</div>
 <script type="module">
 import * as THREE from 'three';
-const N=900, NR=10, ORB=9000, GRAV=1200, ST3=[25,180,GRAV];
+const N=1000, NR=7, ORB=9000, GRAV=1200, ST3=[30,220,GRAV];
 const $=id=>document.getElementById(id);
 const rad=m=>0.5*Math.cbrt(Math.max(m,0.01));
 const rnd=Math.random, TAU=Math.PI*2;
@@ -83,12 +83,12 @@ function spawnItem(i,anywhere){const R=rad(player.m),far=anywhere?R*(4+rnd()*36)
  }
  is[i]=s;ic[i]=(rnd()*5)|0;ik[i]=kind;
  tmpC.setHex(PAL[Math.min(stage3,2)][ic[i]]);itemMesh.setColorAt(i,tmpC);}
-function spawnRival(r){const R=rad(player.m),v=randDir(),d=R*(8+rnd()*18);
- // Bias toward dangerous peers so the arena isn't empty grazing
+function spawnRival(r){const R=rad(player.m),v=randDir(),d=R*(12+rnd()*22);
+ // Mostly smaller/even; rare predators so reds don't constant-hunt
  const roll=rnd();
- const m=Math.max(0.4, player.m*(roll<0.35?0.4+rnd()*0.5:roll<0.7?0.9+rnd()*0.5:1.2+rnd()*1.1));
+ const m=Math.max(0.35, player.m*(roll<0.55?0.35+rnd()*0.45:roll<0.88?0.75+rnd()*0.35:1.05+rnd()*0.55));
  const o=r||sw(m,[0,0,0],false);o.m=m;
- o.p=[player.p[0]+v[0]*d,player.p[1]+v[1]*d,player.p[2]+v[2]*d];o.dir=randDir();o.hue=rnd();o.hunger=0.6+rnd()*0.8;return o;}
+ o.p=[player.p[0]+v[0]*d,player.p[1]+v[1]*d,player.p[2]+v[2]*d];o.dir=randDir();o.hue=rnd();o.hunger=0.35+rnd()*0.45;return o;}
 function init(){S={mode:'3d',t:0,yaw:0,pitch:0,trans:0,dead:false,best:1};stage3=0;itemMesh.geometry=geos[0];
  player=sw(1,[0,0,0],true);rivals=[];for(let i=0;i<NR;i++)rivals.push(spawnRival());
  for(let i=0;i<N;i++)spawnItem(i,true);itemMesh.instanceColor.needsUpdate=true;
@@ -123,26 +123,26 @@ function update(dt){S.t+=dt;const two=S.mode==='2d';const PR=rad(player.m);
  for(const s of all){s.dash-=dt;s.cd-=dt;}
  // rival AI
  for(const r of rivals){const R=rad(r.m);r.ai-=dt;
-  if(r.ai<=0){r.ai=0.18+rnd()*0.22;let flee=[0,0,0],fl=0,prey=null,pd=1e9;
-   for(const o of all){if(o===r)continue;const d=[o.p[0]-r.p[0],o.p[1]-r.p[1],o.p[2]-r.p[2]],dl=Math.hypot(...d)||1,oR=rad(o.m);
-    if(o.m>r.m*1.08&&dl<(R+oR)*(two?7:6)){flee[0]-=d[0]/dl/dl;flee[1]-=d[1]/dl/dl;flee[2]-=d[2]/dl/dl;fl=1}
-    else if(o.m*1.05<r.m&&dl<R*(two?20:16)*(r.hunger||1)&&dl<pd){pd=dl;prey=o}}
-   // Prefer hunting the player when close in size
+  if(r.ai<=0){r.ai=0.28+rnd()*0.35;let flee=[0,0,0],fl=0,prey=null,pd=1e9;
+   for(const o of all){if(o===r)continue;const d=[o.p[0]-r.p[0],o.p[1]-r.p[1],o.p[2]-r.p[2]],dl=Math.hypot(...d)||1;
+    if(o.m>r.m*1.12&&dl<(R+rad(o.m))*(two?5:4.5)){flee[0]-=d[0]/dl/dl;flee[1]-=d[1]/dl/dl;flee[2]-=d[2]/dl/dl;fl=1}
+    else if(o.m*1.15<r.m&&dl<R*(two?14:12)*(r.hunger||1)&&dl<pd){pd=dl;prey=o}}
+   // Only chase player if clearly bigger and already nearby (no long-range red stalk)
    const pd2=Math.hypot(player.p[0]-r.p[0],player.p[1]-r.p[1],player.p[2]-r.p[2]);
-   if(!fl && player.m*1.05<r.m && pd2<R*(two?22:18)){prey=player;pd=pd2}
+   if(!fl && player.m*1.2<r.m && pd2<R*(two?10:8)){prey=player;pd=pd2}
    if(fl)r.tgt=norm(flee);
-   else if(prey){r.tgt=norm([prey.p[0]-r.p[0],prey.p[1]-r.p[1],prey.p[2]-r.p[2]]);if(pd<R*5&&rnd()<0.55)dash(r)}
-   else{let best=-1,bd=1e18;for(let k=0;k<50;k++){const i=(rnd()*N)|0;if(is[i]>R*0.88)continue;const d=(ix[i]-r.p[0])**2+(iy[i]-r.p[1])**2+(iz[i]-r.p[2])**2;if(d<bd){bd=d;best=i}}
+   else if(prey){r.tgt=norm([prey.p[0]-r.p[0],prey.p[1]-r.p[1],prey.p[2]-r.p[2]]);if(pd<R*3.5&&rnd()<0.22)dash(r)}
+   else{let best=-1,bd=1e18;for(let k=0;k<45;k++){const i=(rnd()*N)|0;if(is[i]>R*0.9)continue;const d=(ix[i]-r.p[0])**2+(iy[i]-r.p[1])**2+(iz[i]-r.p[2])**2;if(d<bd){bd=d;best=i}}
     if(best>=0)r.tgt=norm([ix[best]-r.p[0],iy[best]-r.p[1],iz[best]-r.p[2]]);}
    if(two)r.tgt[2]=0;}
-  const turn=two?4.2:3.4;const k=Math.min(1,dt*turn);r.dir=norm([r.dir[0]+(r.tgt[0]-r.dir[0])*k,r.dir[1]+(r.tgt[1]-r.dir[1])*k,two?0:r.dir[2]+(r.tgt[2]-r.dir[2])*k]);}
+  const turn=two?2.8:2.4;const k=Math.min(1,dt*turn);r.dir=norm([r.dir[0]+(r.tgt[0]-r.dir[0])*k,r.dir[1]+(r.tgt[1]-r.dir[1])*k,two?0:r.dir[2]+(r.tgt[2]-r.dir[2])*k]);}
  // move
- for(const s of all){const v=spd(s)*(s.player?mul:(0.92+(s.hunger||0.7)*0.12))*dt;s.sp=v/dt;s.p[0]+=s.dir[0]*v;s.p[1]+=s.dir[1]*v;s.p[2]+=two?0:s.dir[2]*v;if(two)s.p[2]=0;}
+ for(const s of all){const v=spd(s)*(s.player?mul:0.78)*dt;s.sp=v/dt;s.p[0]+=s.dir[0]*v;s.p[1]+=s.dir[1]*v;s.p[2]+=two?0:s.dir[2]*v;if(two)s.p[2]=0;}
  // items
  const pull=two?(stage2Pull()):(stage3===0?1.1:stage3===1?1.35:0.95);
  for(const s of all){const R=rad(s.m),lim=R*(two?0.88:0.9),er=R*pull,mag=R*(two?2.2:2.6),px=s.p[0],py=s.p[1],pz=s.p[2];
   for(let i=0;i<N;i++){const dx=ix[i]-px,dy=iy[i]-py,dz=iz[i]-pz,d2=dx*dx+dy*dy+dz*dz,si=is[i];
-   if(si<lim){if(d2<(er+si*0.25)**2){const raw=Math.max(0.015,si*si*si*0.55);const gain=Math.min(s.m*0.018+0.05, raw);s.m+=gain;spawnItem(i,false);continue}
+   if(si<lim){if(d2<(er+si*0.25)**2){const raw=Math.max(0.02,si*si*si*0.7);const gain=Math.min(s.m*0.028+0.06, raw);s.m+=gain;spawnItem(i,false);continue}
     if(s.player&&d2<mag*mag){const f=Math.min(1,dt*(two?2.2:2.6));ix[i]-=dx*f;iy[i]-=dy*f;iz[i]-=dz*f}}
    else if(s.player){const md=R+si*0.85;if(d2<md*md){const d=Math.sqrt(d2)||1,o=(md-d)/d*1.15;s.p[0]-=dx*o;s.p[1]-=dy*o;s.p[2]-=dz*o}}}}
  const PR2=rad(player.m),far=(PR2*44)**2;
@@ -151,8 +151,8 @@ function update(dt){S.t+=dt;const two=S.mode==='2d';const PR=rad(player.m);
  for(let a=0;a<all.length;a++)for(let b=a+1;b<all.length;b++){const A=all[a],B=all[b],RA=rad(A.m),RB=rad(B.m);
   const d=[B.p[0]-A.p[0],B.p[1]-A.p[1],B.p[2]-A.p[2]],dl=Math.hypot(...d)||1e-3;if(dl>(RA+RB)*0.8)continue;
   let big=A,sm=B;if(B.m>A.m){big=B;sm=A}
-  if(big.m>sm.m*1.06){const dr=Math.min(sm.m,(sm.m*1.1+0.5)*dt);sm.m-=dr;big.m+=Math.min(dr*0.65, big.m*0.025+0.4);
-   if(sm.m<0.45){if(sm.player){die();return}big.m+=Math.min(sm.m, big.m*0.06+1);spawnRival(sm)}}
+  if(big.m>sm.m*1.15){const dr=Math.min(sm.m,(sm.m*0.45+0.2)*dt);sm.m-=dr;big.m+=Math.min(dr*0.5, big.m*0.015+0.3);
+   if(sm.m<0.3){if(sm.player){die();return}big.m+=Math.min(sm.m, big.m*0.05+0.8);spawnRival(sm)}}
   else{const o=((RA+RB)*0.8-dl)/dl*0.5;A.p[0]-=d[0]*o;A.p[1]-=d[1]*o;A.p[2]-=d[2]*o;B.p[0]+=d[0]*o;B.p[1]+=d[1]*o;B.p[2]+=d[2]*o}}
  for(const r of rivals){const d=Math.hypot(r.p[0]-player.p[0],r.p[1]-player.p[1],r.p[2]-player.p[2]);
   if(d>PR2*48||r.m<player.m*0.04||r.m>player.m*10)spawnRival(r)}
