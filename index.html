@@ -18,6 +18,7 @@ canvas{display:block;position:fixed;inset:0}
 <canvas id="c2" style="display:none"></canvas>
 <div id="hud"><div id="stage"></div><div id="mass"></div><div id="bar"><div id="barf"></div></div></div>
 <div id="banner"></div>
+<div id="dbg" style="position:fixed;top:6px;right:6px;z-index:20;font:11px sans-serif;text-align:right"><button id="dbgb" style="opacity:.45;font:10px sans-serif;padding:2px 5px;background:#222;color:#ccc;border:1px solid #555;border-radius:4px">DBG</button><div id="dbgp" style="display:none;margin-top:4px;background:#000c;padding:6px;border-radius:6px;display:none;flex-direction:column;gap:4px"></div></div>
 <div id="over"><b>ABSORBED</b><div id="final"></div><div style="margin-top:14px;opacity:.8">Tap / click / Enter to restart</div></div>
 <div id="help">Drag to steer &nbsp;•&nbsp; Tap to dash (costs mass) &nbsp;•&nbsp; Hunt green &nbsp;•&nbsp; Flee red &nbsp;•&nbsp; Stages get denser and meaner</div>
 <script type="module">
@@ -253,6 +254,22 @@ function drawItem(i,x,y,r,st){const c=ic[i],big=ik[i]===2,sh='#0000003a';
   else if(c===2){ctx.fillStyle='#555';ctx.fillRect(x-r*.07,y-r*.2,r*.14,r*1.1);ctx.fillStyle=i%2?'#d22':'#2a7';if(i%2)poly(x,y-r*.4,[0,-r*.6,r*.6,0,0,r*.6,-r*.6,0]);else ctx.fillRect(x-r*.7,y-r*.8,r*1.4,r*.6)}
   else{ctx.fillStyle='#f70';poly(x,y,[0,-r,r*.7,r*.8,-r*.7,r*.8]);ctx.fillStyle='#fff';ctx.fillRect(x-r*.3,y,r*.6,r*.2)}
  }}
+// ---------- debug skip-level
+const LV=[['Subatomic',1],['Atoms & Molecules',30],['Dust & Rock',220],['Rocks',GRAV],['Forest',5000],['City',22000]];
+function jumpTo(m){if(S.dead)init();player.m=m;player.dash=0;S.best=Math.max(S.best,m);
+ if(m>=GRAV){if(S.mode!=='2d')enter2D();else{player.p=[0,0,0];S.cx=S.cy=0;for(let i=0;i<N;i++)spawnItem(i,true)}}
+ else{S.mode='3d';player.p=[0,0,0];renderer.domElement.style.display='block';cv.style.display='none';
+  stage3=m<ST3[0]?0:m<ST3[1]?1:2;itemMesh.geometry=geos[stage3];for(const a of atoms)spawnAtom(a,true);
+  for(let i=0;i<N;i++)spawnItem(i,true);itemMesh.instanceColor.needsUpdate=true;const PR=rad(m);camera.position.set(0,PR*2,PR*6)}
+ for(const r of rivals){spawnRival(r);if(S.mode==='2d'){r.p[2]=0;r.dir=norm([r.dir[0],r.dir[1],0]);r.tgt=r.dir.slice()}}
+ banner(stageName().toUpperCase(),1.4)}
+function nextStage(){const i=LV.findIndex(l=>l[1]>player.m);jumpTo(LV[i<0?LV.length-1:i][1])}
+function dblMass(){const m=player.m*2;if((m>=GRAV)!==(S.mode==='2d'))jumpTo(m);else player.m=m}
+{const p=$('dbgp'),stop=e=>e.stopPropagation();for(const ev of['pointerdown','pointerup','pointermove','touchstart','click'])$('dbg').addEventListener(ev,stop);
+ const add=(t,f)=>{const b=document.createElement('button');b.textContent=t;b.style.cssText='font:13px sans-serif;padding:6px 10px;background:#234;color:#fff;border:1px solid #58a;border-radius:4px';b.onclick=e=>{e.stopPropagation();f()};p.appendChild(b)};
+ LV.forEach(([n,m])=>add(n,()=>jumpTo(m)));add('Next stage',nextStage);add('+Mass x2',dblMass);
+ $('dbgb').onclick=e=>{e.stopPropagation();p.style.display=p.style.display==='flex'?'none':'flex'};}
+addEventListener('keydown',e=>{if(e.code==='KeyN')nextStage();if(e.code==='KeyM')dblMass()});
 // ---------- loop
 let last=performance.now(),hudT=0;
 function frame(now){const dt=Math.min(0.05,(now-last)/1000);last=now;
