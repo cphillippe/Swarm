@@ -86,7 +86,7 @@ function spawnItem(i,anywhere){const R=rad(player.m),far=anywhere?R*(4+rnd()*36)
  if(S.mode==='2d'){
   // ladder: many small, plenty edible-medium, a few slightly-too-big (<=1.45R)
   kind=roll<0.5?0:roll<0.83?1:2;
-  s=kind===0?R*(0.1+rnd()*0.3):kind===1?R*(0.4+rnd()*0.45):R*(0.95+rnd()*0.5);
+  s=kind===0?R*(0.13+rnd()*0.27):kind===1?R*(0.4+rnd()*0.45):R*(0.95+rnd()*0.5);
  }else if(ps===0){ // Subatomic: tiny dust + dangerous heavy nuclei
   s=R*(roll<0.86?0.06+rnd()*0.3:0.95+rnd()*0.9); kind=s/R<0.4?0:2;
  }else if(ps===1){ // Molecules: mid clumps, sticky-looking mediums
@@ -160,6 +160,9 @@ function update(dt){S.t+=dt;const two=S.mode==='2d';const PR=rad(player.m);
    else if(s.player){const md=(R+si)*0.7;if(d2<md*md){const d=Math.sqrt(d2)||1,o=(md-d)/d*0.6;s.p[0]-=dx*o;s.p[1]-=dy*o;s.p[2]-=dz*o}}}}
  const PR2=rad(player.m),far=(PR2*44)**2;
  for(let i=0;i<N;i++){if((ix[i]-player.p[0])**2+(iy[i]-player.p[1])**2+(iz[i]-player.p[2])**2>far)spawnItem(i,false)}
+ // 2D leftover sweep: clear old-stage / too-tiny items over ~2.5s
+ if(two){const k=st2(player.m),PRc=rad(player.m),n=Math.ceil(N*dt/2.5);S.sw=S.sw||0;
+  for(let q=0;q<n;q++){const i=S.sw=(S.sw+1)%N;if(ist[i]<k-1||is[i]<PRc*0.08||(ist[i]<k&&is[i]<PRc*0.3))spawnItem(i,true)}}
  // atoms
  if(!two)updateAtoms(dt);
  // swarm vs swarm
@@ -235,7 +238,7 @@ function render2D(dt){const PR=rad(player.m);S.zk=Math.max(0,(S.zk||0)-dt/2);con
  for(let x=Math.floor((S.cx-W/2/sc)/g)*g;x<S.cx+W/2/sc;x+=g){ctx.moveTo(X(x),0);ctx.lineTo(X(x),H)}
  for(let y=Math.floor((S.cy-H/2/sc)/g)*g;y<S.cy+H/2/sc;y+=g){ctx.moveTo(0,Y(y));ctx.lineTo(W,Y(y))}ctx.stroke();}
  for(let i=0;i<N;i++){const x=X(ix[i]),y=Y(iy[i]),r=is[i]*sc;if(x<-r*2||x>W+r*2||y<-r*2||y>H+r*2)continue;
-  drawItem(i,x,y,r);}
+  drawItem(i,x,y,r);if(r>4){const tb=is[i]>=PR*0.88;ctx.strokeStyle=tb?'#ff3344b0':'#ffffff45';ctx.lineWidth=tb?Math.max(2,r*.08):Math.max(1,r*.05);ctx.beginPath();ctx.arc(x,y,r*1.08,0,TAU);ctx.stroke()}}
  const t=S.t;for(const s of [...rivals,player]){const R=rad(s.m),x=X(s.p[0]),y=Y(s.p[1]),r=R*sc;if(x<-r*2||x>W+r*2||y<-r*2||y>H+r*2)continue;const c=hex(colFor(s));
   if(s.player&&st2(player.m)===9){glow(x,y,r*1.8,'#ff9a3caa');ctx.strokeStyle='#ffcc66';ctx.lineWidth=Math.max(2,r*.12);ctx.beginPath();ctx.ellipse(x,y,r*1.5,r*.45,S.t*.3,0,TAU);ctx.stroke()}
   ctx.fillStyle='#000';ctx.beginPath();ctx.arc(x,y,r,0,TAU);ctx.fill();ctx.strokeStyle=c;ctx.lineWidth=Math.max(2,r*0.08);ctx.stroke();
