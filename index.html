@@ -8,7 +8,7 @@ canvas{display:block;position:fixed;inset:0}
 #stage{font-size:20px;font-weight:700;letter-spacing:1px}
 #mass{font-size:15px;opacity:.9}
 #bar{width:180px;height:6px;background:#ffffff22;border-radius:3px;margin-top:6px}#barf{height:100%;width:0;background:#7cf;border-radius:3px}
-#banner{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;font-size:12vmin;font-weight:900;letter-spacing:.2em;pointer-events:none;opacity:0;color:#fff;text-shadow:0 0 30px #7cf;z-index:6;text-align:center}
+#banner{transition:opacity .35s ease;position:fixed;inset:0;display:flex;align-items:center;justify-content:center;font-size:12vmin;font-weight:900;letter-spacing:.2em;pointer-events:none;opacity:0;color:#fff;text-shadow:0 0 30px #7cf;z-index:6;text-align:center}
 #over{position:fixed;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;background:#000a;z-index:7;font-size:22px;text-align:center}
 #over b{font-size:9vmin}
 #help{position:fixed;bottom:10px;left:0;right:0;text-align:center;font-size:12px;opacity:.6;pointer-events:none;z-index:5}
@@ -24,7 +24,8 @@ canvas{display:block;position:fixed;inset:0}
 <script type="module">
 import * as THREE from 'three';
 const N=1000, NR=8, ORB=9000, GRAV=1200, ST3=[30,220,GRAV];
-const SURF=[GRAV,5000,22000,120000,8e5,6e6,5e7],SURFN=['Surface — Rocks','Surface — Forest','Surface — City','Planet','Star System','Galaxy','Black Hole'];
+const SURF=[GRAV,3000,7000,16000,36000,80000,2e5,1e6,6e6,5e7],SURFN=['Surface — Rocks','Surface — Biotic','Surface — Forest','Surface — Animals','City — Streets','City — Big Buildings','Planet','Star System','Galaxy','Black Hole'];
+const BG2=['#5b5246','#3d5a3a','#2f5d34','#4f6b34','#3a3d44','#2e3140','#123a5e','#05060c','#0a0614','#000000'];
 const st2=m=>{let i=0;while(i<SURF.length-1&&m>=SURF[i+1])i++;return i};
 const $=id=>document.getElementById(id);
 const rad=m=>0.5*Math.cbrt(Math.max(m,0.01));
@@ -43,9 +44,12 @@ addEventListener('resize',resize);resize();
 function dotTex(){const c=document.createElement('canvas');c.width=c.height=64;const g=c.getContext('2d');
  const gr=g.createRadialGradient(32,32,0,32,32,32);gr.addColorStop(0,'rgba(255,255,255,1)');gr.addColorStop(.25,'rgba(255,255,255,.7)');gr.addColorStop(1,'rgba(255,255,255,0)');
  g.fillStyle=gr;g.fillRect(0,0,64,64);return new THREE.CanvasTexture(c);}
-const geos=[new THREE.SphereGeometry(1,8,6),new THREE.IcosahedronGeometry(1,0),new THREE.DodecahedronGeometry(1,0)];
+function mol(parts){const arr=[];for(const [r,x,y,z] of parts){const g=new THREE.SphereGeometry(r,8,6).toNonIndexed();g.translate(x,y,z);arr.push(...g.attributes.position.array)}
+ const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(arr,3));return g}
+const geos=[new THREE.SphereGeometry(1,8,6),mol([[.6,0,0,0],[.38,.62,.45,0],[.38,-.62,.45,0],[.38,0,-.7,.3],[.3,0,-.2,-.75]]),new THREE.DodecahedronGeometry(1,0)];
 const itemMesh=new THREE.InstancedMesh(geos[0],new THREE.MeshBasicMaterial({transparent:true,opacity:.9,blending:THREE.AdditiveBlending,depthWrite:false}),N);
-itemMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);itemMesh.frustumCulled=false;scene.add(itemMesh);
+const im=[itemMesh];for(let j=1;j<3;j++)im.push(new THREE.InstancedMesh(geos[j],itemMesh.material,N));
+for(const m of im){m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);m.frustumCulled=false;m.setColorAt(0,new THREE.Color(1,1,1));scene.add(m)}
 const cores=new THREE.InstancedMesh(new THREE.SphereGeometry(1,16,12),new THREE.MeshBasicMaterial(),NR+1);cores.frustumCulled=false;scene.add(cores);
 const oPos=new Float32Array(ORB*3),oCol=new Float32Array(ORB*3),og=new THREE.BufferGeometry();
 og.setAttribute('position',new THREE.BufferAttribute(oPos,3).setUsage(THREE.DynamicDrawUsage));
@@ -68,7 +72,7 @@ const atomR=a=>rad(ATOMS[a.k][1])*1.25;
 function spawnAtom(a,near){const R=rad(player.m),v=randDir(),d=near?R*(6+rnd()*18):R*(20+rnd()*14);a.p=[player.p[0]+v[0]*d,player.p[1]+v[1]*d,player.p[2]+v[2]*d];a.v=randDir().map(x=>x*0.4)}
 const OR=new Float32Array(900*6);for(let i=0;i<OR.length;i++)OR[i]=rnd();
 // ---------- state
-const ix=new Float32Array(N),iy=new Float32Array(N),iz=new Float32Array(N),is=new Float32Array(N),ic=new Uint8Array(N),ik=new Uint8Array(N);
+const ist=new Uint8Array(N),ix=new Float32Array(N),iy=new Float32Array(N),iz=new Float32Array(N),is=new Float32Array(N),ic=new Uint8Array(N),ik=new Uint8Array(N);
 let S,player,rivals,stage3=0;
 const tmpC=new THREE.Color(),dummy=new THREE.Object3D();
 function sw(m,p,isP){return{m,p:p.slice(),dir:[0,0,-1],dash:0,cd:0,player:isP,ai:0,tgt:[0,0,0],sp:0}}
@@ -76,28 +80,31 @@ function randDir(){if(S.mode==='2d'){const a=rnd()*TAU;return[Math.cos(a),Math.s
 function spawnItem(i,anywhere){const R=rad(player.m),far=anywhere?R*(4+rnd()*36):R*(22+rnd()*18),v=randDir();
  ix[i]=player.p[0]+v[0]*far;iy[i]=player.p[1]+v[1]*far;iz[i]=player.p[2]+v[2]*far;
  let s,kind; const roll=rnd();
+ const two2=S.mode==='2d';let ps;if(two2){const k=st2(player.m),pg=(player.m-SURF[k])/((SURF[k+1]||SURF[k]*10)-SURF[k]);ps=k+(k<SURF.length-1&&pg>0.7&&rnd()<(pg-0.7)/0.3*0.6?1:0)}
+ else{const lo=[0,...ST3][stage3],hi=ST3[stage3],pg=(player.m-lo)/(hi-lo);ps=Math.min(2,stage3+(stage3<2&&pg>0.7&&rnd()<(pg-0.7)/0.3*0.6?1:0))}
+ ist[i]=ps;
  if(S.mode==='2d'){
   // ladder: many small, plenty edible-medium, a few slightly-too-big (<=1.45R)
   kind=roll<0.5?0:roll<0.83?1:2;
   s=kind===0?R*(0.1+rnd()*0.3):kind===1?R*(0.4+rnd()*0.45):R*(0.95+rnd()*0.5);
- }else if(stage3===0){ // Subatomic: tiny dust + dangerous heavy nuclei
+ }else if(ps===0){ // Subatomic: tiny dust + dangerous heavy nuclei
   s=R*(roll<0.86?0.06+rnd()*0.3:0.95+rnd()*0.9); kind=s/R<0.4?0:2;
- }else if(stage3===1){ // Molecules: mid clumps, sticky-looking mediums
+ }else if(ps===1){ // Molecules: mid clumps, sticky-looking mediums
   s=R*(0.15+Math.pow(rnd(),1.4)*0.95); kind=s/R<0.45?0:s/R<0.85?1:2;
  }else{ // Dust/Rock: sparse large rocks, few free crumbs
   s=R*(roll<0.55?0.08+rnd()*0.35:0.7+rnd()*1.1); kind=s/R<0.4?0:2;
  }
  is[i]=s;ic[i]=(rnd()*5)|0;ik[i]=kind;
- tmpC.setHex(PAL[Math.min(stage3,2)][ic[i]]);itemMesh.setColorAt(i,tmpC);}
+ if(!two2){tmpC.setHex(PAL[ps][ic[i]]);im[ps].setColorAt(i,tmpC)}}
 function spawnRival(r){const R=rad(player.m),v=randDir(),d=R*(12+rnd()*22);
  // Mostly smaller/even; rare predators so reds don't constant-hunt
  const roll=rnd();
  const m=Math.max(0.35, player.m*(roll<0.45?0.35+rnd()*0.45:roll<0.86?0.8+rnd()*0.35:1.05+rnd()*0.5));
  const o=r||sw(m,[0,0,0],false);o.m=m;
  o.p=[player.p[0]+v[0]*d,player.p[1]+v[1]*d,player.p[2]+v[2]*d];o.dir=randDir();o.hue=rnd();o.hunger=0.5+rnd()*0.5;o.m0=m;return o;}
-function init(){S={mode:'3d',t:0,yaw:0,pitch:0,trans:0,dead:false,best:1};stage3=0;itemMesh.geometry=geos[0];
+function init(){S={mode:'3d',t:0,yaw:0,pitch:0,trans:0,dead:false,best:1};stage3=0;
  player=sw(1,[0,0,0],true);rivals=[];for(let i=0;i<NR;i++)rivals.push(spawnRival());
- for(const a of atoms)spawnAtom(a,true);for(let i=0;i<N;i++)spawnItem(i,true);itemMesh.instanceColor.needsUpdate=true;
+ for(const a of atoms)spawnAtom(a,true);for(let i=0;i<N;i++)spawnItem(i,true);for(const m of im)m.instanceColor.needsUpdate=true;
  renderer.domElement.style.display='block';cv.style.display='none';$('over').style.display='none';
  camera.position.set(0,1,4);}
 // ---------- input
@@ -118,7 +125,7 @@ function dash(s){if(S.mode==='trans'||s.cd>0||s.m<2)return;const c=Math.max(0.2,
 // ---------- sim
 function norm(v){const l=Math.hypot(v[0],v[1],v[2])||1;v[0]/=l;v[1]/=l;v[2]/=l;return v}
 const spd=s=>(3.6+rad(s.m)*2.6)*(s.dash>0?2.6:1);
-function stage2Pull(){return [1.15,0.95,0.8,1,1,1,1.1][st2(player.m)]}
+function stage2Pull(){return [1.15,1.05,0.95,0.9,0.85,0.8,1,1,1,1.1][st2(player.m)]}
 function update(dt){S.t+=dt;const two=S.mode==='2d';const PR=rad(player.m);
  // player
  const [sx,sy]=steer();let mul=1;
@@ -148,7 +155,7 @@ function update(dt){S.t+=dt;const two=S.mode==='2d';const PR=rad(player.m);
  const pull=two?(stage2Pull()):(stage3===0?1.1:stage3===1?1.35:0.95);
  for(const s of all){const R=rad(s.m),lim=R*(two?0.88:0.9),er=R*pull,mag=R*(two?1.6:1.7),px=s.p[0],py=s.p[1],pz=s.p[2];
   for(let i=0;i<N;i++){const dx=ix[i]-px,dy=iy[i]-py,dz=iz[i]-pz,d2=dx*dx+dy*dy+dz*dz,si=is[i];
-   if(si<lim){if(d2<(er+si*0.25)**2){let raw=Math.max(0.02,si*si*si*0.7);if(two){raw*=(ic[i]===4&&ik[i]<2&&(st2(player.m)===0||st2(player.m)>=3))?3:1.6}const gain=Math.min(s.m*(two?0.06:0.028)+0.06, raw);s.m+=gain;spawnItem(i,false);continue}
+   if(si<lim){if(d2<(er+si*0.25)**2){let raw=Math.max(0.02,si*si*si*0.7);if(two){raw*=(ic[i]===4&&ik[i]<2&&[0,1,3,6,7,8,9].includes(ist[i]))?3:1.6}const gain=Math.min(s.m*(two?0.06:0.028)+0.06, raw);s.m+=gain;spawnItem(i,false);continue}
     if(s.player&&d2<mag*mag){const f=Math.min(1,dt*(two?5:6));ix[i]-=dx*f;iy[i]-=dy*f;iz[i]-=dz*f}}
    else if(s.player){const md=(R+si)*0.7;if(d2<md*md){const d=Math.sqrt(d2)||1,o=(md-d)/d*0.6;s.p[0]-=dx*o;s.p[1]-=dy*o;s.p[2]-=dz*o}}}}
  const PR2=rad(player.m),far=(PR2*44)**2;
@@ -166,10 +173,9 @@ function update(dt){S.t+=dt;const two=S.mode==='2d';const PR=rad(player.m);
   if(d>PR2*48||r.m<player.m*0.04||r.m>player.m*10)spawnRival(r)}
  // soft ceiling so City doesn't go infinite
  for(const s of all){if(!(s.m>0))s.m=1;if(s.m>1e15)s.m=1e15}
- if(two){const k=st2(player.m);if(S.st2!==k){if(S.st2!=null&&k>S.st2)banner(k===6?'BLACK HOLE':SURFN[k].replace('Surface — ','').toUpperCase(),1.8);S.st2=k}}
+ if(two){const k=st2(player.m);if(S.st2!==k){if(S.st2!=null&&k>S.st2){banner(SURFN[k].split(' — ').pop().toUpperCase(),1.8);S.zk=1}S.st2=k}}
  S.best=Math.max(S.best,player.m);
- if(!two){const st=player.m<ST3[0]?0:player.m<ST3[1]?1:2;if(st!==stage3){stage3=st;itemMesh.geometry=geos[st];
-   for(let i=0;i<N;i++){tmpC.setHex(PAL[st][ic[i]]);itemMesh.setColorAt(i,tmpC)}banner(STAGE3[st].toUpperCase(),1.6)}
+ if(!two){const st=player.m<ST3[0]?0:player.m<ST3[1]?1:2;if(st!==stage3){stage3=st;banner(STAGE3[st].toUpperCase(),1.6)}
   if(player.m>=GRAV){S.mode='trans';S.trans=0;S.camFrom=camera.position.clone();banner('GRAVITY',3)}}}
 function updateAtoms(dt){const show=stage3===0&&S.mode==='3d',PR=rad(player.m);atomMesh.visible=show;
  for(const a of atoms){a.sp.visible=show;if(!show)continue;const ar=atomR(a),am=ATOMS[a.k][1];
@@ -184,7 +190,7 @@ let bannerT=0,bannerD=1;function banner(t,d){$('banner').textContent=t;bannerT=d
 function enter2D(){S.mode='2d';const P=player.p;
  for(const r of rivals){const rel=[r.p[0]-P[0],r.p[2]-P[2]];r.p=[rel[0],rel[1],0];r.dir=norm([r.dir[0],r.dir[2],0]);r.tgt=r.dir.slice()}
  player.p=[0,0,0];player.dir=[0,-1,0];for(let i=0;i<N;i++)spawnItem(i,true);
- renderer.domElement.style.display='none';cv.style.display='block';S.cx=0;S.cy=0;}
+ renderer.domElement.style.display='none';cv.style.transition='none';cv.style.opacity=0;cv.style.display='block';S.cx=0;S.cy=0;S.st2=st2(player.m);requestAnimationFrame(()=>{cv.style.transition='opacity 1s ease';cv.style.opacity=1});}
 function stageName(){if(S.mode==='2d')return SURFN[st2(player.m)];if(S.mode==='trans')return'GRAVITY';return STAGE3[stage3]}
 const fmt=m=>{if(m<1000)return m.toFixed(1);if(m<1e6)return(m/1e3).toFixed(1)+'k';if(m<1e9)return(m/1e6).toFixed(2)+'M';if(m<1e12)return(m/1e9).toFixed(2)+'B';return(m/1e12).toFixed(2)+'T'};
 function colFor(s){if(s.player)return 0x77ccff;return s.m>player.m*1.12?0xff3344:s.m*1.12<player.m?0x44ff77:0xffdd44}
@@ -200,11 +206,12 @@ function render3D(dt){const all=[player,...rivals],PR=rad(player.m),P=player.p,d
  else if(stage3===0){scene.background.setHex(0x02030a);scene.fog.color.setHex(0x02030a);scene.fog.near=PR*5;scene.fog.far=PR*28}
  else if(stage3===1){scene.background.setHex(0x061018);scene.fog.color.setHex(0x061018);scene.fog.near=PR*7;scene.fog.far=PR*36}
  else{scene.background.setHex(0x0a0908);scene.fog.color.setHex(0x0a0908);scene.fog.near=PR*10;scene.fog.far=PR*48};
- for(let i=0;i<N;i++){dummy.position.set(ix[i],iy[i],iz[i]);dummy.rotation.set(S.t*0.3+i,i*0.7,0);dummy.scale.setScalar(is[i]);dummy.updateMatrix();itemMesh.setMatrixAt(i,dummy.matrix)}
+ {const tg=scene.background.clone();S.bg3=S.bg3||tg.clone();S.bg3.lerp(tg,1-Math.exp(-dt*1.6));scene.background.copy(S.bg3);scene.fog.color.copy(S.bg3)}
+ const Z=new THREE.Matrix4().makeScale(0,0,0);for(let i=0;i<N;i++){dummy.position.set(ix[i],iy[i],iz[i]);dummy.rotation.set(S.t*0.3+i,i*0.7,0);dummy.scale.setScalar(is[i]);dummy.updateMatrix();for(let j=0;j<3;j++)im[j].setMatrixAt(i,j===ist[i]?dummy.matrix:Z)}
  atoms.forEach((a,j)=>{const ar=atomR(a),ok=player.m>ATOMS[a.k][1]*1.15;dummy.position.set(...a.p);dummy.rotation.set(0,0,0);dummy.scale.setScalar(ar*(1+0.04*Math.sin(S.t*3+j)));dummy.updateMatrix();atomMesh.setMatrixAt(j,dummy.matrix);tmpC.setHex(ATOMS[a.k][2]);if(!ok)tmpC.multiplyScalar(0.45);atomMesh.setColorAt(j,tmpC);
   a.sp.position.set(a.p[0],a.p[1]+ar*1.5,a.p[2]);a.sp.scale.set(ar*1.6,ar*0.8,1);a.sp.material.opacity=ok?1:0.6;});
  atomMesh.instanceMatrix.needsUpdate=true;if(atomMesh.instanceColor)atomMesh.instanceColor.needsUpdate=true;
- itemMesh.instanceMatrix.needsUpdate=true;itemMesh.instanceColor.needsUpdate=true;
+ for(const m of im){m.instanceMatrix.needsUpdate=true;m.instanceColor.needsUpdate=true}
  let n=0;const t=S.t;
  all.forEach((s,j)=>{const R=rad(s.m);dummy.position.set(...s.p);dummy.rotation.set(0,0,0);dummy.scale.setScalar(R*0.42);dummy.updateMatrix();cores.setMatrixAt(j,dummy.matrix);
   tmpC.setHex(colFor(s));cores.setColorAt(j,tmpC);const cr=tmpC.r,cg=tmpC.g,cb=tmpC.b;
@@ -219,24 +226,53 @@ function render3D(dt){const all=[player,...rivals],PR=rad(player.m),P=player.p,d
  renderer.render(scene,camera);}
 // ---------- render 2D
 const hex=c=>'#'+c.toString(16).padStart(6,'0');
-function render2D(dt){const PR=rad(player.m),sc=Math.min(W,H)/(PR*22);S.cx+=(player.p[0]-S.cx)*Math.min(1,dt*6);S.cy+=(player.p[1]-S.cy)*Math.min(1,dt*6);
+function render2D(dt){const PR=rad(player.m);S.zk=Math.max(0,(S.zk||0)-dt/2);const sc=Math.min(W,H)/(PR*22)/(1+(S.zk>0?0.18*Math.sin(Math.PI*(1-S.zk)):0));S.cx+=(player.p[0]-S.cx)*Math.min(1,dt*6);S.cy+=(player.p[1]-S.cy)*Math.min(1,dt*6);
  const X=x=>(x-S.cx)*sc+W/2,Y=y=>(y-S.cy)*sc+H/2;ctx.setTransform(DPR,0,0,DPR,0,0);
- const st=st2(player.m);ctx.fillStyle=['#5b5246','#2f5d34','#3a3d44','#123a5e','#05060c','#0a0614','#000'][st];ctx.fillRect(0,0,W,H);
- if(st>=4){ctx.fillStyle='#fff';for(let k=0;k<160;k++){const o=k*6;const x=((OR[o]*W*3-S.cx*sc*0.05)%W+W)%W,y=((OR[o+1]*H*3-S.cy*sc*0.05)%H+H)%H;ctx.globalAlpha=0.3+OR[o+2]*0.7;ctx.fillRect(x,y,1+OR[o+3]*1.5,1+OR[o+3]*1.5)}ctx.globalAlpha=1}
- if(st<4){const g=Math.pow(10,Math.floor(Math.log10(PR*4)));ctx.strokeStyle='#ffffff14';ctx.lineWidth=1;ctx.beginPath();
+ const st=st2(player.m);{const tg=new THREE.Color(BG2[st]);S.bg2=S.bg2||tg.clone();S.bg2.lerp(tg,1-Math.exp(-dt*1.6));S.sa=(S.sa||0)+((st>=7?1:0)-(S.sa||0))*Math.min(1,dt*1.2)}
+ ctx.fillStyle='#'+S.bg2.getHexString();ctx.fillRect(0,0,W,H);
+ if(S.sa>0.01){ctx.fillStyle='#fff';for(let k=0;k<160;k++){const o=k*6;const x=((OR[o]*W*3-S.cx*sc*0.05)%W+W)%W,y=((OR[o+1]*H*3-S.cy*sc*0.05)%H+H)%H;ctx.globalAlpha=(0.3+OR[o+2]*0.7)*S.sa;ctx.fillRect(x,y,1+OR[o+3]*1.5,1+OR[o+3]*1.5)}ctx.globalAlpha=1}
+ if(st<7){const g=Math.pow(10,Math.floor(Math.log10(PR*4)));ctx.strokeStyle='#ffffff14';ctx.lineWidth=1;ctx.beginPath();
  for(let x=Math.floor((S.cx-W/2/sc)/g)*g;x<S.cx+W/2/sc;x+=g){ctx.moveTo(X(x),0);ctx.lineTo(X(x),H)}
  for(let y=Math.floor((S.cy-H/2/sc)/g)*g;y<S.cy+H/2/sc;y+=g){ctx.moveTo(0,Y(y));ctx.lineTo(W,Y(y))}ctx.stroke();}
  for(let i=0;i<N;i++){const x=X(ix[i]),y=Y(iy[i]),r=is[i]*sc;if(x<-r*2||x>W+r*2||y<-r*2||y>H+r*2)continue;
-  drawItem(i,x,y,r,st);}
+  drawItem(i,x,y,r);}
  const t=S.t;for(const s of [...rivals,player]){const R=rad(s.m),x=X(s.p[0]),y=Y(s.p[1]),r=R*sc;if(x<-r*2||x>W+r*2||y<-r*2||y>H+r*2)continue;const c=hex(colFor(s));
-  if(s.player&&st2(player.m)===6){glow(x,y,r*1.8,'#ff9a3caa');ctx.strokeStyle='#ffcc66';ctx.lineWidth=Math.max(2,r*.12);ctx.beginPath();ctx.ellipse(x,y,r*1.5,r*.45,S.t*.3,0,TAU);ctx.stroke()}
+  if(s.player&&st2(player.m)===9){glow(x,y,r*1.8,'#ff9a3caa');ctx.strokeStyle='#ffcc66';ctx.lineWidth=Math.max(2,r*.12);ctx.beginPath();ctx.ellipse(x,y,r*1.5,r*.45,S.t*.3,0,TAU);ctx.stroke()}
   ctx.fillStyle='#000';ctx.beginPath();ctx.arc(x,y,r,0,TAU);ctx.fill();ctx.strokeStyle=c;ctx.lineWidth=Math.max(2,r*0.08);ctx.stroke();
   ctx.globalCompositeOperation='lighter';ctx.fillStyle=c;const cnt=Math.min(90,8+Math.sqrt(s.m)*2|0);
   for(let k=0;k<cnt;k++){const o=k*6,a=OR[o+1]*TAU+t*(0.8+OR[o+2])*(OR[o+3]>.5?1:-1),rr=r*(1.02+0.3*OR[o]);ctx.globalAlpha=0.4+OR[o+4]*0.6;ctx.beginPath();ctx.arc(x+Math.cos(a)*rr,y+Math.sin(a)*rr,Math.max(1.5,r*0.04),0,TAU);ctx.fill()}
   ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over';}}
 function poly(x,y,pts){ctx.beginPath();ctx.moveTo(x+pts[0],y+pts[1]);for(let k=2;k<pts.length;k+=2)ctx.lineTo(x+pts[k],y+pts[k+1]);ctx.closePath();ctx.fill()}
 function circ(x,y,r,c){ctx.fillStyle=c;ctx.beginPath();ctx.arc(x,y,r,0,TAU);ctx.fill()}
-function drawItem(i,x,y,r,st){const c=ic[i],big=ik[i]===2,sh='#0000003a';
+function drawItem(i,x,y,r){const st=ist[i],c=ic[i],big=ik[i]===2;
+ if(st===0)return drawOld(i,x,y,r,0);if(st===2)return drawOld(i,x,y,r,1);if(st>=6)return drawSpace(i,x,y,r,st-3,c,big);
+ if(st===1)return drawBio(i,x,y,r,c,big);if(st===3)return drawAnimal(i,x,y,r,c,big);if(st===4)return drawStreet(i,x,y,r,c,big);return drawTower(i,x,y,r,c,big)}
+function drawBio(i,x,y,r,c,big){const t=S.t;
+ if(big){glow(x,y,r*1.1,'#7fd07a66');rockPoly(i,x,y,r*.9,'#6fbf6a88');circ(x+r*.2,y-r*.1,r*.3,'#2a6a3a')}
+ else if(c===0){circ(x,y,r,'#9fe0a066');ctx.strokeStyle='#bff0b0';ctx.lineWidth=Math.max(1,r*.1);ctx.beginPath();ctx.arc(x,y,r,0,TAU);ctx.stroke();circ(x+r*.2,y,r*.35,'#3a7a4a')}
+ else if(c===1){ctx.strokeStyle='#c9f';ctx.lineWidth=Math.max(1,r*.08);ctx.beginPath();ctx.moveTo(x-r*.8,y);for(let k=1;k<6;k++)ctx.lineTo(x-r*.8-k*r*.25,y+Math.sin(t*8+k+i)*r*.2);ctx.stroke();ctx.fillStyle='#b08cff';ctx.beginPath();ctx.ellipse(x,y,r,r*.5,0,0,TAU);ctx.fill()}
+ else if(c===2){ctx.strokeStyle='#222';ctx.lineWidth=Math.max(1,r*.08);ctx.beginPath();for(let k=-1;k<=1;k++){ctx.moveTo(x+k*r*.4,y-r*.9);ctx.lineTo(x+k*r*.4,y+r*.9)}ctx.stroke();ctx.fillStyle=i%2?'#c33':'#3a3';ctx.beginPath();ctx.ellipse(x,y,r*.75,r*.55,0,0,TAU);ctx.fill();circ(x+r*.75,y,r*.25,'#222')}
+ else if(c===3){if(i%2){ctx.fillStyle='#5cae3c';ctx.beginPath();ctx.ellipse(x,y,r,r*.45,i,0,TAU);ctx.fill()}else for(let k=0;k<5;k++)circ(x-r+k*r*.5,y+Math.sin(t*3+k+i)*r*.2,r*.28,'#d88a8a')}
+ else{glow(x,y,r*1.5,'#fff27a99');circ(x,y,r*.5,'#ffe94a')}}
+function drawAnimal(i,x,y,r,c,big){
+ if(big){const cow=i%2===0,b=cow?'#f2f2f2':'#a0703c';ctx.fillStyle='#0003';ctx.beginPath();ctx.ellipse(x+r*.15,y+r*.2,r,r*.55,0,0,TAU);ctx.fill();ctx.fillStyle='#333';for(const k of[-.6,-.3,.3,.6])ctx.fillRect(x+k*r,y+r*.2,r*.12,r*.6);
+  ctx.fillStyle=b;ctx.beginPath();ctx.ellipse(x,y,r,r*.5,0,0,TAU);ctx.fill();circ(x+r*1.05,y-r*.3,r*.32,b);if(cow){circ(x-r*.3,y-r*.1,r*.22,'#222');circ(x+r*.3,y+r*.15,r*.18,'#222')}else{ctx.strokeStyle='#5a3a1a';ctx.lineWidth=Math.max(1,r*.07);ctx.beginPath();ctx.moveTo(x+r,y-r*.55);ctx.lineTo(x+r*.8,y-r);ctx.moveTo(x+r*1.15,y-r*.55);ctx.lineTo(x+r*1.35,y-r);ctx.stroke()}}
+ else if(c===0){ctx.strokeStyle='#caa';ctx.lineWidth=Math.max(1,r*.08);ctx.beginPath();ctx.moveTo(x-r*.7,y);ctx.quadraticCurveTo(x-r*1.3,y-r*.5,x-r*1.5,y);ctx.stroke();ctx.fillStyle='#999';ctx.beginPath();ctx.ellipse(x,y,r*.75,r*.45,0,0,TAU);ctx.fill();circ(x+r*.5,y-r*.35,r*.22,'#bbb')}
+ else if(c===1){ctx.fillStyle='#eee';ctx.beginPath();ctx.ellipse(x+r*.4,y-r*.8,r*.14,r*.45,.2,0,TAU);ctx.fill();ctx.beginPath();ctx.ellipse(x+r*.15,y-r*.8,r*.14,r*.45,-.2,0,TAU);ctx.fill();circ(x,y,r*.6,'#eee');circ(x+r*.3,y-r*.35,r*.32,'#f4f4f4')}
+ else if(c===2){const f=Math.sin(S.t*10+i)*r*.4;ctx.strokeStyle=['#36c','#c33','#333'][i%3];ctx.lineWidth=Math.max(1.5,r*.18);ctx.beginPath();ctx.moveTo(x-r,y-f);ctx.lineTo(x,y);ctx.lineTo(x+r,y-f);ctx.stroke()}
+ else if(c===3){circ(x-r*.4,y+r*.1,r*.55,'#3fa34d');circ(x+r*.4,y+r*.1,r*.55,'#379a45');circ(x,y-r*.25,r*.6,'#4caf50')}
+ else{glow(x,y,r*1.4,'#ffd84a88');ctx.fillStyle='#ffd23b';ctx.beginPath();ctx.ellipse(x,y,r*.6,r*.8,0,0,TAU);ctx.fill()}}
+function drawStreet(i,x,y,r,c,big){
+ if(big){const w=r*2.4,h=r*.9;ctx.fillStyle='#0004';ctx.fillRect(x-w/2+r*.2,y-h/2+r*.2,w,h);ctx.fillStyle=['#ddd','#e83','#36a'][i%3];ctx.fillRect(x-w/2,y-h/2,w*.72,h);ctx.fillStyle='#c22';ctx.fillRect(x+w*.24,y-h/2,w*.26,h);ctx.fillStyle='#0008';ctx.fillRect(x+w*.36,y-h*.35,w*.1,h*.7)}
+ else if(c===1){ctx.strokeStyle='#ddd';ctx.lineWidth=Math.max(1,r*.12);ctx.beginPath();ctx.arc(x-r*.55,y,r*.4,0,TAU);ctx.moveTo(x+r*.95,y);ctx.arc(x+r*.55,y,r*.4,0,TAU);ctx.moveTo(x-r*.55,y);ctx.lineTo(x,y-r*.4);ctx.lineTo(x+r*.55,y);ctx.stroke()}
+ else drawOld(i,x,y,r,2,[0,0,4,1,2][c])}
+function drawTower(i,x,y,r,c,big){
+ if(big&&i%2){ctx.fillStyle='#0004';ctx.beginPath();ctx.ellipse(x+r*.2,y+r*.2,r*1.4,r,0,0,TAU);ctx.fill();ctx.fillStyle='#bbb';ctx.beginPath();ctx.ellipse(x,y,r*1.4,r,0,0,TAU);ctx.fill();ctx.fillStyle='#3a8a3a';ctx.beginPath();ctx.ellipse(x,y,r*.9,r*.55,0,0,TAU);ctx.fill();ctx.strokeStyle='#fff8';ctx.beginPath();ctx.moveTo(x,y-r*.55);ctx.lineTo(x,y+r*.55);ctx.stroke()}
+ else if(big||c===3){const w=r*1.1,h=r*2;ctx.fillStyle='#0005';ctx.fillRect(x-w/2+r*.3,y-h/2+r*.3,w,h);ctx.fillStyle=['#7b8fa8','#5a6a80','#9aa8b8'][i%3];ctx.fillRect(x-w/2,y-h/2,w,h);ctx.fillStyle='#ffe9a055';for(let a=0;a<3;a++)for(let b=0;b<6;b++)if(OR[(i+a*7+b)%OR.length]>.35)ctx.fillRect(x-w/2+w*(.1+a*.3),y-h/2+h*(.05+b*.155),w*.2,h*.09)}
+ else if(c===0){const w=r*1.4;ctx.fillStyle=['#c96','#ddb','#a76'][i%3];ctx.fillRect(x-w/2,y-w*.2,w,w*.6);ctx.fillStyle='#933';poly(x,y-w*.2,[-w*.6,0,0,-w*.45,w*.6,0])}
+ else if(c===4){glow(x,y,r*1.5,'#ffd84a88');ctx.fillStyle='#ffcc33';ctx.fillRect(x-r*.35,y-r,r*.7,r*2)}
+ else drawOld(i,x,y,r,2,3)}
+function drawOld(i,x,y,r,st,cc){const c=cc??ic[i],big=cc==null&&ik[i]===2,sh='#0000003a';
  if(st===0){ // Rocks
   if(big||c===2){const n=7,p=[];for(let k=0;k<n;k++){const a=k/n*TAU,rr=r*(0.75+0.35*OR[(i*7+k)%OR.length]);p.push(Math.cos(a)*rr,Math.sin(a)*rr)}
    ctx.fillStyle=sh;poly(x+r*.2,y+r*.2,p);ctx.fillStyle=big?'#6e665c':'#8d857a';poly(x,y,p);ctx.fillStyle='#ffffff18';poly(x-r*.1,y-r*.1,p.map(v=>v*.5))}
@@ -292,12 +328,12 @@ function drawSpace(i,x,y,r,st,c,big){const t=S.t;
   else{glow(x,y,r*1.6,'#b070ff99');circ(x,y,r*.5,'#2a0044')}
  }}
 // ---------- debug skip-level
-const LV=[['Subatomic',1],['Atoms & Molecules',30],['Dust & Rock',220],['Rocks',GRAV],['Forest',5000],['City',22000],['Planet',120000],['Star System',8e5],['Galaxy',6e6],['Black Hole',5e7]];
+const LV=[['Subatomic',1],['Atoms & Molecules',30],['Dust & Rock',220],...SURFN.map((n,k)=>[n.split(' — ').pop(),SURF[k]])];
 function jumpTo(m){if(S.dead)init();player.m=m;player.dash=0;S.best=Math.max(S.best,m);
  if(m>=GRAV){if(S.mode!=='2d')enter2D();else{player.p=[0,0,0];S.cx=S.cy=0;for(let i=0;i<N;i++)spawnItem(i,true)}}
  else{S.mode='3d';player.p=[0,0,0];renderer.domElement.style.display='block';cv.style.display='none';
-  stage3=m<ST3[0]?0:m<ST3[1]?1:2;itemMesh.geometry=geos[stage3];for(const a of atoms)spawnAtom(a,true);
-  for(let i=0;i<N;i++)spawnItem(i,true);itemMesh.instanceColor.needsUpdate=true;const PR=rad(m);camera.position.set(0,PR*2,PR*6)}
+  stage3=m<ST3[0]?0:m<ST3[1]?1:2;for(const a of atoms)spawnAtom(a,true);
+  for(let i=0;i<N;i++)spawnItem(i,true);for(const m of im)m.instanceColor.needsUpdate=true;const PR=rad(m);camera.position.set(0,PR*2,PR*6)}
  for(const r of rivals){spawnRival(r);if(S.mode==='2d'){r.p[2]=0;r.dir=norm([r.dir[0],r.dir[1],0]);r.tgt=r.dir.slice()}}
  banner(stageName().toUpperCase(),1.4)}
 function nextStage(){const i=LV.findIndex(l=>l[1]>player.m);jumpTo(LV[i<0?LV.length-1:i][1])}
@@ -315,7 +351,7 @@ function frame(now){const dt=Math.min(0.05,(now-last)/1000);last=now;
  bannerT-=dt;$('banner').style.opacity=bannerT>0?Math.min(1,bannerT/bannerD*2):0;
  if((hudT-=dt)<0){hudT=0.1;$('stage').textContent=stageName();const all=[player,...rivals].sort((a,b)=>b.m-a.m);
   $('mass').textContent='Mass '+fmt(player.m)+'  •  Rank '+(all.indexOf(player)+1)+'/'+all.length;
-  const lo=S.mode==='2d'?SURF[st2(player.m)]:[0,...ST3][stage3],hi=S.mode==='2d'?(SURF[st2(player.m)+1]||SURF[6]*10):ST3[stage3];
+  const lo=S.mode==='2d'?SURF[st2(player.m)]:[0,...ST3][stage3],hi=S.mode==='2d'?(SURF[st2(player.m)+1]||SURF[SURF.length-1]*10):ST3[stage3];
   $('barf').style.width=Math.max(0,Math.min(100,(player.m-lo)/(hi-lo)*100))+'%';}
  requestAnimationFrame(frame);}
 init();requestAnimationFrame(frame);
